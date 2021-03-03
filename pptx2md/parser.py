@@ -1,13 +1,15 @@
 from __future__ import print_function
-import pptx
-from pptx.enum.shapes import PP_PLACEHOLDER, MSO_SHAPE_TYPE
-from pptx.enum.dml import MSO_COLOR_TYPE, MSO_THEME_COLOR
-from PIL import Image
+
 import os
-from rapidfuzz import process as fuze_process
 from operator import attrgetter
+
+from PIL import Image
+from pptx.enum.dml import MSO_COLOR_TYPE, MSO_THEME_COLOR
+from pptx.enum.shapes import MSO_SHAPE_TYPE, PP_PLACEHOLDER
+from rapidfuzz import process as fuze_process
+
+import pptx2md.outputter as outputter
 from pptx2md.global_var import g
-from pptx2md import global_var
 
 picture_count = 0
 slide_count = 0
@@ -19,17 +21,23 @@ def is_title(shape):
         shape.placeholder_format.type == PP_PLACEHOLDER.TITLE
         or shape.placeholder_format.type == PP_PLACEHOLDER.SUBTITLE
         or shape.placeholder_format.type == PP_PLACEHOLDER.VERTICAL_TITLE
-        or shape.placeholder_format.type == PP_PLACEHOLDER.CENTER_TITLE):
+        or shape.placeholder_format.type == PP_PLACEHOLDER.CENTER_TITLE
+    ):
         return True
     return False
 
+
 def is_text_block(shape):
     if shape.has_text_frame:
-        if shape.is_placeholder and shape.placeholder_format.type == PP_PLACEHOLDER.BODY:
+        if (
+            shape.is_placeholder
+            and shape.placeholder_format.type == PP_PLACEHOLDER.BODY
+        ):
             return True
         if len(shape.text) > g.text_block_threshold:
             return True
     return False
+
 
 def is_list_block(shape):
     levels = []
@@ -40,29 +48,44 @@ def is_list_block(shape):
             return True
     return False
 
+
 def is_accent(font):
-    if font.underline or font.italic or (font.color.type == MSO_COLOR_TYPE.SCHEME
-                and (font.color.theme_color == MSO_THEME_COLOR.ACCENT_1
-                    or font.color.theme_color == MSO_THEME_COLOR.ACCENT_2
-                    or font.color.theme_color == MSO_THEME_COLOR.ACCENT_3
-                    or font.color.theme_color == MSO_THEME_COLOR.ACCENT_4
-                    or font.color.theme_color == MSO_THEME_COLOR.ACCENT_5
-                    or font.color.theme_color == MSO_THEME_COLOR.ACCENT_6)):
+    if (
+        font.underline
+        or font.italic
+        or (
+            font.color.type == MSO_COLOR_TYPE.SCHEME
+            and (
+                font.color.theme_color == MSO_THEME_COLOR.ACCENT_1
+                or font.color.theme_color == MSO_THEME_COLOR.ACCENT_2
+                or font.color.theme_color == MSO_THEME_COLOR.ACCENT_3
+                or font.color.theme_color == MSO_THEME_COLOR.ACCENT_4
+                or font.color.theme_color == MSO_THEME_COLOR.ACCENT_5
+                or font.color.theme_color == MSO_THEME_COLOR.ACCENT_6
+            )
+        )
+    ):
         return True
     return False
+
 
 def is_strong(font):
-    if font.bold or (font.color.type == MSO_COLOR_TYPE.SCHEME
-                and (font.color.theme_color == MSO_THEME_COLOR.DARK_1
-                    or font.color.theme_color == MSO_THEME_COLOR.DARK_2)):
+    if font.bold or (
+        font.color.type == MSO_COLOR_TYPE.SCHEME
+        and (
+            font.color.theme_color == MSO_THEME_COLOR.DARK_1
+            or font.color.theme_color == MSO_THEME_COLOR.DARK_2
+        )
+    ):
         return True
     return False
 
+
 def get_formatted_text(para):
-    res = ''
+    res = ""
     for run in para.runs:
         text = run.text.strip()
-        if text == '':
+        if text == "":
             continue
         if not g.disable_escaping:
             text = out.get_escaped(text)
@@ -70,7 +93,7 @@ def get_formatted_text(para):
             if run.hyperlink.address:
                 text = out.get_hyperlink(text, run.hyperlink.address)
         except:
-            text = out.get_hyperlink(text, 'error:ppt-link-parsing-issue')
+            text = out.get_hyperlink(text, "error:ppt-link-parsing-issue")
         if is_accent(run.font):
             text = out.get_accent(text)
         elif is_strong(run.font):
@@ -91,7 +114,7 @@ def process_title(shape):
             g.max_custom_title
             out.put_title(text, g.max_custom_title + 1)
         else:
-            print(text, ' transferred to ', res[0], '. the ratio is ', round(res[1]))
+            print(text, " transferred to ", res[0], ". the ratio is ", round(res[1]))
             out.put_title(res[0], g.titles[res[0]])
     else:
         out.put_title(text, 1)
@@ -102,18 +125,19 @@ def process_text_block(shape):
     if is_list_block(shape):
         # generate list block
         for para in shape.text_frame.paragraphs:
-            if para.text.strip() == '':
+            if para.text.strip() == "":
                 continue
             text = get_formatted_text(para)
             out.put_list(text, para.level)
-        out.write('\n')
+        out.write("\n")
     else:
         # generate paragraph block
         for para in shape.text_frame.paragraphs:
-            if para.text.strip() == '':
+            if para.text.strip() == "":
                 continue
             text = get_formatted_text(para)
             out.put_para(text)
+
 
 def process_picture(shape):
     if g.disable_image:
@@ -129,15 +153,16 @@ def process_picture(shape):
     output_path = g.path_name_ext(g.img_path, pic_name, pic_ext)
     common_path = os.path.commonpath([g.out_path, g.img_path])
     img_outputter_path = os.path.relpath(output_path, common_path)
-    with open(output_path, 'wb') as f:
+    with open(output_path, "wb") as f:
         f.write(shape.image.blob)
         picture_count += 1
-    if pic_ext == 'wmf':
+    if pic_ext == "wmf":
         if not g.disable_wmf:
-            Image.open(output_path).save(os.path.splitext(output_path)[0]+'.png')
-            out.put_image(os.path.splitext(img_outputter_path)[0]+'.png', width)
+            Image.open(output_path).save(os.path.splitext(output_path)[0] + ".png")
+            out.put_image(os.path.splitext(img_outputter_path)[0] + ".png", width)
     else:
         out.put_image(img_outputter_path, width)
+
 
 def ungroup_shapes(shapes):
     res = []
@@ -148,25 +173,29 @@ def ungroup_shapes(shapes):
             res.append(shape)
     return res
 
+
 # main
-def parse(prs, outputer):
+def parse(prs, outputer, out_path):
     global out
-    out = outputer
+    # out = outputer
     for slide in prs.slides:
+
         global slide_count
         slide_count += 1
-        print('processing slide %d...' % slide_count)
+        out = outputter.md_outputter("_".join([out_path, str(slide_count)]))
+        print("processing slide %d..." % slide_count)
 
         shapes = []
         try:
-            shapes = sorted(ungroup_shapes(slide.shapes), key=attrgetter('top', 'left'))
+            shapes = sorted(ungroup_shapes(slide.shapes), key=attrgetter("top", "left"))
         except:
-            print('Bad shapes encountered in this slide. Please check or move them and try again.')
-            print('shapes:')
+            print(
+                "Bad shapes encountered in this slide. Please check or move them and try again."
+            )
+            print("shapes:")
             for sp in slide.shapes:
                 print(sp.shape_type)
                 print(sp.top, sp.left, sp.width, sp.height)
-                
         for shape in shapes:
             if is_title(shape):
                 process_title(shape)
@@ -175,4 +204,4 @@ def parse(prs, outputer):
             elif shape.shape_type == MSO_SHAPE_TYPE.PICTURE:
                 process_picture(shape)
     out.close()
-    print('all done!')
+    print("all done!")
